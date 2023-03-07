@@ -48,7 +48,9 @@ class Net(nn.Module):
 
 
 def validate(test_loader, model, environment):
+    was_training = model.training
     start_time = time.time()
+    model.eval()
     with torch.no_grad():
         match = total = 0
         for data in tqdm.tqdm(test_loader):
@@ -61,19 +63,26 @@ def validate(test_loader, model, environment):
             match += (predicted == labels).sum().item()
         accuracy = match / total
     time_consumed = time.time() - start_time
+    model.train(was_training)
     return accuracy, time_consumed
 
-def run_training(environment='cpu', seed=42, max_iteration=800,
+def run_training(environment='cpu', seed=42, max_iteration=8000,
                  target_acc=0.85, validate_every=4000, model_closure=None):
     if model_closure is None:
         model = Net()  # just uses example net from tutorial.
     else:
         model = model_closure()
     torch.manual_seed(seed)
-    train_loader = DataLoader(train_set, batch_size=batch_size,
-                              shuffle=True, num_workers=num_workers, pin_memory=True if environment != 'cpu' else False, pin_memory_device=environment if environment != 'cpu' else "")
-    test_loader = DataLoader(test_set, batch_size=batch_size,
-                             shuffle=False, num_workers=num_workers, pin_memory=True if environment != 'cpu' else False, pin_memory_device=environment if environment != 'cpu' else "")
+    try:
+        train_loader = DataLoader(train_set, batch_size=batch_size,
+                              shuffle=True, num_workers=num_workers, pin_memory=(True if environment != 'cpu' else False), pin_memory_device=environment if environment != 'cpu' else "")
+        test_loader = DataLoader(test_set, batch_size=batch_size,
+                             shuffle=False, num_workers=num_workers, pin_memory=(True if environment != 'cpu' else False), pin_memory_device=environment if environment != 'cpu' else "")
+    except:
+        train_loader = DataLoader(train_set, batch_size=batch_size,
+                              shuffle=True, num_workers=num_workers, pin_memory=(True if environment != 'cpu' else False))
+        test_loader = DataLoader(test_set, batch_size=batch_size,
+                             shuffle=False, num_workers=num_workers, pin_memory=(True if environment != 'cpu' else False))
     st = time.time()
     _i = 0
     accuracy = 0
@@ -82,6 +91,7 @@ def run_training(environment='cpu', seed=42, max_iteration=800,
         loss_func = torch.nn.CrossEntropyLoss()
         optimizer = optim.SGD(params=model.parameters(), lr=0.001)
         model.to(environment)
+        model.train()
         pbar = tqdm.tqdm(total=4000 * len(train_loader))
         for epoch in range(4000):
             for i, data in enumerate(train_loader, 0):
